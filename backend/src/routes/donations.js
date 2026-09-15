@@ -1,4 +1,27 @@
 const express = require('express');
+
 const router = express.Router();
-router.get('/', (req, res) => res.json({ success: true, message: 'donations endpoint ready' }));
+
+const {
+  createDonation,
+  getMyDonations,
+  listDonations
+} = require('../controllers/donationController');
+
+const {
+  protect,
+  authorize
+} = require('../middleware/auth');
+
+router.post('/', protect, createDonation);
+
+router.get('/me', protect, getMyDonations);
+
+router.get(
+  '/',
+  protect,
+  authorize('admin'),
+  listDonations
+);
+
 module.exports = router;
