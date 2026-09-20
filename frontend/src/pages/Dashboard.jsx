@@ -102,18 +102,77 @@ export default function Dashboard() {
     }
   }
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true)
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
+
   const handleActivateSubscription = async (plan) => {
     setSubLoading(true)
     try {
-      const checkout = await api.post('/subscriptions/checkout', { plan })
-      if (checkout.data.mode === 'stripe' && checkout.data.url) {
-        window.location.href = checkout.data.url
+      const { data } = await api.post('/subscriptions/create-order', { plan })
+
+      // No Razorpay keys → demo mode
+      if (data.mode === 'demo' || data.demoActivate) {
+        const ok = window.confirm(
+          'Razorpay keys not configured. Activate ' + plan + ' in DEMO mode? (No real payment)'
+        )
+        if (!ok) return
+        await api.post('/subscriptions/activate-demo', { plan })
+        window.location.reload()
         return
       }
-      await api.post('/subscriptions/activate-demo', { plan })
-      window.location.reload()
+
+      const scriptOk = await loadRazorpayScript()
+      if (!scriptOk) {
+        alert('Could not load Razorpay. Check internet.')
+        return
+      }
+
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency || 'INR',
+        name: 'Digital Heroes',
+        description: data.planLabel || (plan === 'yearly' ? 'Yearly Plan' : 'Monthly Plan'),
+        order_id: data.orderId,
+        prefill: {
+          name: data.user?.name || '',
+          email: data.user?.email || ''
+        },
+        theme: { color: '#1a5c4a' },
+        handler: async function (response) {
+          try {
+            await api.post('/subscriptions/verify-payment', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              plan
+            })
+            alert('Payment successful! Subscription is now active.')
+            window.location.reload()
+          } catch (err) {
+            alert(err.response?.data?.message || 'Payment verification failed')
+          }
+        }
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', function () {
+        alert('Payment failed or cancelled.')
+      })
+      rzp.open()
     } catch (err) {
-      alert(err.response?.data?.message || 'Subscription failed')
+      alert(err.response?.data?.message || 'Could not start payment')
     } finally {
       setSubLoading(false)
     }
@@ -419,21 +478,23 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm text-[#5a5a5a] mb-4">Subscribe to enter draws.</p>
+                  <p className="text-sm text-[#5a5a5a] mb-4">
+                    Pay with Razorpay (Test Mode). Without keys → demo activate.
+                  </p>
                   <div className="space-y-2">
                     <button
                       onClick={() => handleActivateSubscription('monthly')}
                       disabled={subLoading}
                       className="w-full btn-primary py-2.5 text-sm"
                     >
-                      {subLoading ? 'Processing...' : 'Monthly — ₹999'}
+                      {subLoading ? 'Processing...' : 'Pay Monthly — ₹999'}
                     </button>
                     <button
                       onClick={() => handleActivateSubscription('yearly')}
                       disabled={subLoading}
                       className="w-full btn-secondary py-2.5 text-sm"
                     >
-                      Yearly — ₹9,999
+                      {subLoading ? 'Processing...' : 'Pay Yearly — ₹9,999'}
                     </button>
                   </div>
                 </div>

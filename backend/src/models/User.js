@@ -51,6 +51,8 @@ const userSchema = new mongoose.Schema({
   subscription: {
     plan: {
       type: String,
+      razorpayOrderId: String,
+      razorpayPaymentId: String,
       enum: ['none', 'monthly', 'yearly'],
       default: 'none'
     },

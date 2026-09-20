@@ -1,25 +1,18 @@
 const express = require('express');
-
 const router = express.Router();
-
 const {
   getStatus,
-  createCheckout,
+  createOrder,
+  verifyPayment,
   activateDemo,
-  cancel,
-  webhook
+  cancel
 } = require('../controllers/subscriptionController');
-
 const { protect } = require('../middleware/auth');
 
-router.post('/webhook', webhook);
-
 router.get('/status', protect, getStatus);
-
-router.post('/checkout', protect, createCheckout);
-
+router.post('/create-order', protect, createOrder);
+router.post('/verify-payment', protect, verifyPayment);
 router.post('/activate-demo', protect, activateDemo);
-
 router.post('/cancel', protect, cancel);
 
 module.exports = router;
